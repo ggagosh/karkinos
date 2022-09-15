@@ -1,0 +1,20 @@
+[package]
+name = "karkinos"
+version = "0.0.1"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+clap = { version = "3.0", features = ["derive"] }
+anyhow = "1.0.62"
+serde_yaml = "0.9.11"
+serde_json = "1.0"
+validator = { version = "0.16", features = ["derive"] }
+scraper = "0.13.0"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+html5ever = "0.26.0"
+log = "0.4.17"
+env_logger = "0.9.0"
+linked-hash-map = { version= "0.5.6", features = ["serde_impl"] }
+schemars = "0.8.10"

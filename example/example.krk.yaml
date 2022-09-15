@@ -1,0 +1,20 @@
+config:
+  url: https://www.denofgeek.com/tv/star-wars-the-mandalorian-ultimate-character
+data:
+  title:
+    selector: h1.entry__title
+  description:
+    selector: .is-style-ingress.mb-0
+  image:
+    selector: .entry__img.entry__img--single
+    attr: src
+  popular:
+    listItem: .popular-posts .post
+    data:
+      tag:
+        selector: .entry__summary .entry__category-anchor
+      name:
+        selector: .entry__summary .entry__title a
+      image:
+        selector: .entry__img
+        attr: data-src
