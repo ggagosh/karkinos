@@ -8,7 +8,7 @@ use std::fs::File;
 mod types;
 
 fn main() {
-    let dest = File::create("../../krk-schema.json").expect("can't create json schema file :(");
+    let dest = File::create("krk-schema.json").expect("can't create json schema file :(");
     let schema = schema_for!(types::ScrapeRoot);
 
     serde_json::to_writer_pretty(dest, &schema).unwrap();
