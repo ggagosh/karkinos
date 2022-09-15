@@ -2,8 +2,15 @@
 name = "karkinos"
 version = "0.0.1"
 edition = "2021"
+default-run = "main"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "main"
+path = "src/main.rs"
+
+[[bin]]
+name = "gen"
+path = "src/gen.rs"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
