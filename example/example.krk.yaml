@@ -9,7 +9,7 @@ data:
     selector: .entry__img.entry__img--single
     attr: src
   popular:
-    listItem: .popular-posts .post
+    selector: .popular-posts .post
     data:
       tag:
         selector: .entry__summary .entry__category-anchor

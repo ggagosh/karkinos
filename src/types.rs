@@ -1,9 +1,11 @@
+use log::error;
 use schemars::JsonSchema;
+use scraper::Selector;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use validator::Validate;
 
-/// for serde default bool true
+/// for serde defaults
 fn _default_true() -> bool {
     return true;
 }
@@ -15,39 +17,44 @@ pub type DataConfig = HashMap<String, ItemConfig>;
 #[derive(Serialize, Deserialize, Debug, Validate, Clone, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScrapeRoot {
-    #[serde(rename = "config")]
     #[validate]
     pub config: ScrapeRootConfig,
 
-    #[serde(rename = "data")]
     pub data: DataConfig,
 }
 
 #[derive(Serialize, Deserialize, Debug, Validate, Clone, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ScrapeRootConfig {
-    #[serde(rename = "url")]
     #[validate(url)]
     pub url: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Validate, Clone, JsonSchema)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ItemConfig {
-    #[serde(rename = "selector")]
-    pub selector: Option<String>,
-
-    #[serde(rename = "attr")]
+    pub selector: String,
     pub attr: Option<String>,
 
-    #[serde(rename = "listItem")]
-    pub list_item: Option<String>,
-
-    #[serde(rename = "data")]
     pub data: Option<DataConfig>,
 
-    #[serde(rename = "trim", default = "_default_true")]
+    #[serde(default = "_default_true")]
     pub trim: bool,
+
+    #[serde(default)]
+    pub nth: usize,
+}
+
+impl ItemConfig {
+    #[allow(dead_code)]
+    pub fn get_item_selector(&self) -> Selector {
+        match Selector::parse(&self.selector) {
+            Ok(selector) => selector,
+            Err(error) => {
+                error!("selector parse error: {:?}", error);
+
+                panic!("invalid selector: {}", self.selector)
+            }
+        }
+    }
 }
 
 /// Types for Output

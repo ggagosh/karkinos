@@ -1,6 +1,6 @@
 use anyhow::{Context, Result as AnyhowResult};
 use clap::Parser;
-use scraper::{ElementRef, Html, Selector};
+use scraper::{ElementRef, Html};
 use std::fs::{read_to_string, File};
 use std::io::stdout;
 use std::path::PathBuf;
@@ -73,42 +73,37 @@ fn populate_values(root_element: ElementRef, config: DataConfig) -> ReturnedData
     let mut element_data = ReturnedData::new();
 
     for (name, item_config) in config.into_iter() {
-        match item_config {
+        let selector = item_config.get_item_selector();
+        let element = root_element.select(&selector);
+
+        let values = match item_config {
             ItemConfig {
-                list_item: Some(selector_str),
-                data: Some(data),
+                data: Some(inner_config),
                 ..
             } => {
-                let selector = Selector::parse(&selector_str).unwrap();
-                let element = root_element.select(&selector);
-                let mut list_data: Vec<ReturnedData> = vec![];
-                element.for_each(|element| {
-                    let element_data = populate_values(element, data.clone());
+                let mut inner_values = vec![];
+                element.for_each(|elem| {
+                    let inner_value = populate_values(elem, inner_config.clone());
 
-                    list_data.push(element_data);
+                    inner_values.push(inner_value);
                 });
 
-                element_data.insert(name, ReturnedDataItem::DataItems(list_data));
+                ReturnedDataItem::DataItems(inner_values)
             }
-            item_config => {
-                let selector_str = item_config.selector.unwrap();
-
-                let selector = Selector::parse(&selector_str).unwrap();
-                let element = root_element.select(&selector).next();
-                let mut value = match element {
+            _ => {
+                let nth_element = element.clone().nth(item_config.nth);
+                let value = match nth_element {
                     None => String::from(""),
-                    Some(value) => match item_config.attr {
-                        None => value.inner_html(),
-                        Some(attr) => value.value().attr(&attr).unwrap_or("").to_string(),
+                    Some(nth_element) => match item_config.attr {
+                        None => nth_element.inner_html(),
+                        Some(attr) => nth_element.value().attr(&attr).unwrap_or("").to_string(),
                     },
                 };
-                if item_config.trim {
-                    value = value.trim().to_string();
-                }
 
-                element_data.insert(name, ReturnedDataItem::StringItem(value));
+                ReturnedDataItem::StringItem(value)
             }
-        }
+        };
+        element_data.insert(name, values);
     }
 
     element_data
@@ -150,7 +145,7 @@ mod tests {
         title:
             selector: h1
         articles:
-            listItem: article
+            selector: article
             data:
                 title:
                     selector: h2

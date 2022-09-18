@@ -21,6 +21,9 @@
   "definitions": {
     "ItemConfig": {
       "type": "object",
+      "required": [
+        "selector"
+      ],
       "properties": {
         "attr": {
           "type": [
@@ -37,24 +40,20 @@
             "$ref": "#/definitions/ItemConfig"
           }
         },
-        "listItem": {
-          "type": [
-            "string",
-            "null"
-          ]
+        "nth": {
+          "default": 0,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
         },
         "selector": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "trim": {
           "default": true,
           "type": "boolean"
         }
-      },
-      "additionalProperties": false
+      }
     },
     "ScrapeRootConfig": {
       "type": "object",
@@ -66,8 +65,7 @@
           "type": "string",
           "format": "uri"
         }
-      },
-      "additionalProperties": false
+      }
     }
   }
 }
