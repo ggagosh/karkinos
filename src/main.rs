@@ -1,9 +1,11 @@
 use anyhow::{Context, Result as AnyhowResult};
 use clap::Parser;
-use scraper::{ElementRef, Html};
+use rayon::prelude::*;
+use scraper::Html;
 use std::fs::{read_to_string, File};
 use std::io::stdout;
 use std::path::PathBuf;
+use std::sync::Arc;
 use validator::Validate;
 
 use crate::types::{DataConfig, ItemConfig, ReturnedData, ReturnedDataItem, ScrapeRoot};
@@ -45,14 +47,11 @@ fn main() -> AnyhowResult<()> {
 
     let url = config_serialized.config.url;
 
-    let site_body = reqwest::blocking::get(url)?
+    let html = reqwest::blocking::get(url)?
         .text()
         .with_context(|| format!("can't get url content"))?;
 
-    let document = Html::parse_document(&site_body);
-    let root_element = document.root_element();
-
-    let data = populate_values(root_element, config_serialized.data.clone());
+    let data = populate_values(html, config_serialized.data.clone());
 
     match args.output {
         None => {
@@ -69,51 +68,64 @@ fn main() -> AnyhowResult<()> {
     Ok(())
 }
 
-fn populate_values(root_element: ElementRef, config: DataConfig) -> ReturnedData {
-    let mut element_data = ReturnedData::new();
+fn populate_values(html: String, config: DataConfig) -> ReturnedData {
+    let html = Arc::new(html.clone());
 
-    for (name, item_config) in config.into_iter() {
-        let selector = item_config.get_item_selector();
-        let element = root_element.select(&selector);
+    config
+        .into_par_iter()
+        .map(|(name, config)| {
+            let html_parsed = Html::parse_fragment(html.as_str());
+            let selector = config.get_item_selector();
+            let selected_element = html_parsed.root_element().select(&selector);
 
-        let values = match item_config {
-            ItemConfig {
-                data: Some(inner_config),
-                ..
-            } => {
-                let mut inner_values = vec![];
-                element.for_each(|elem| {
-                    let inner_value = populate_values(elem, inner_config.clone());
+            match config {
+                ItemConfig {
+                    data: Some(inner), ..
+                } => {
+                    let inner_htmls = selected_element
+                        .map(|elem| elem.html())
+                        .collect::<Vec<String>>();
+                    let inner_values = inner_htmls
+                        .into_par_iter()
+                        .map(|elem| populate_values(elem, inner.clone()))
+                        .collect::<Vec<ReturnedData>>();
 
-                    inner_values.push(inner_value);
-                });
+                    ReturnedData::from([(name, ReturnedDataItem::DataItems(inner_values))])
+                }
+                _ => {
+                    let selected_element_nth = selected_element.clone().nth(config.nth);
+                    let value = match selected_element_nth {
+                        None => String::from(""),
+                        Some(selected_element) => match config.attr {
+                            None => selected_element.inner_html(),
+                            Some(attr) => selected_element
+                                .value()
+                                .attr(&attr)
+                                .unwrap_or("")
+                                .to_string(),
+                        },
+                    };
 
-                ReturnedDataItem::DataItems(inner_values)
+                    ReturnedData::from([(name, ReturnedDataItem::StringItem(value))])
+                }
             }
-            _ => {
-                let nth_element = element.clone().nth(item_config.nth);
-                let value = match nth_element {
-                    None => String::from(""),
-                    Some(nth_element) => match item_config.attr {
-                        None => nth_element.inner_html(),
-                        Some(attr) => nth_element.value().attr(&attr).unwrap_or("").to_string(),
-                    },
-                };
+        })
+        .reduce(
+            || ReturnedData::new(),
+            |dt1, dt2| {
+                dt2.iter().fold(dt1, |mut acc, (name, value)| {
+                    acc.entry(name.clone()).or_insert(value.clone());
 
-                ReturnedDataItem::StringItem(value)
-            }
-        };
-        element_data.insert(name, values);
-    }
-
-    element_data
+                    acc
+                })
+            },
+        )
 }
 
 #[cfg(test)]
 mod tests {
     use crate::ReturnedDataItem::{DataItems, StringItem};
     use crate::{populate_values, DataConfig};
-    use scraper::Html;
 
     #[test]
     fn populate_values_test() {
@@ -137,9 +149,7 @@ mod tests {
                   </article>
                </body>
             </html>
-        "#;
-        let fragment = Html::parse_fragment(html);
-        let root_element = fragment.root_element();
+        "#.to_string();
 
         let yaml_config = r#"
         title:
@@ -154,7 +164,7 @@ mod tests {
         "#;
         let data_config = serde_yaml::from_str::<DataConfig>(yaml_config).unwrap();
 
-        let data = populate_values(root_element, data_config);
+        let data = populate_values(html, data_config);
 
         assert_eq!(
             data.get("title").unwrap().clone(),
