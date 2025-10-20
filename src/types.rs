@@ -10,6 +10,18 @@ fn _default_true() -> bool {
     return true;
 }
 
+fn _default_timeout() -> u64 {
+    30
+}
+
+fn _default_retries() -> u32 {
+    0
+}
+
+fn _default_delay() -> u64 {
+    0
+}
+
 /// Types for Config
 
 pub type DataConfig = HashMap<String, ItemConfig>;
@@ -24,12 +36,70 @@ pub struct ScrapeRoot {
 }
 
 #[derive(Serialize, Deserialize, Debug, Validate, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[validate(schema(function = "validate_urls"))]
 pub struct ScrapeRootConfig {
+    /// Primary URL to scrape (can be overridden by urls)
     #[validate(url)]
-    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+
+    /// Multiple URLs to scrape in batch
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub urls: Option<Vec<String>>,
+
+    /// HTTP headers to send with request
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headers: Option<HashMap<String, String>>,
+
+    /// Request timeout in seconds
+    #[serde(default = "_default_timeout")]
+    pub timeout: u64,
+
+    /// Number of retry attempts on failure
+    #[serde(default = "_default_retries")]
+    pub retries: u32,
+
+    /// Delay between requests in milliseconds (for rate limiting)
+    #[serde(default = "_default_delay")]
+    pub delay: u64,
+
+    /// Proxy URL (e.g., http://proxy:8080)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<String>,
+
+    /// Cache directory for storing responses
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_dir: Option<String>,
+
+    /// Use cached responses if available
+    #[serde(default)]
+    pub use_cache: bool,
+}
+
+fn validate_urls(config: &ScrapeRootConfig) -> Result<(), validator::ValidationError> {
+    if config.url.is_none() && config.urls.is_none() {
+        return Err(validator::ValidationError::new(
+            "Either 'url' or 'urls' must be provided",
+        ));
+    }
+    Ok(())
+}
+
+impl ScrapeRootConfig {
+    pub fn get_urls(&self) -> Vec<String> {
+        if let Some(urls) = &self.urls {
+            urls.clone()
+        } else if let Some(url) = &self.url {
+            vec![url.clone()]
+        } else {
+            vec![]
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Validate, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ItemConfig {
     pub selector: String,
     pub attr: Option<String>,
@@ -41,6 +111,38 @@ pub struct ItemConfig {
 
     #[serde(default)]
     pub nth: usize,
+
+    /// Default value if extraction fails
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<String>,
+
+    /// Regex pattern to extract from the text
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub regex: Option<String>,
+
+    /// Text replacement: [pattern, replacement]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replace: Option<Vec<String>>,
+
+    /// Convert text to uppercase
+    #[serde(default)]
+    pub uppercase: bool,
+
+    /// Convert text to lowercase
+    #[serde(default)]
+    pub lowercase: bool,
+
+    /// Convert to number
+    #[serde(default)]
+    pub to_number: bool,
+
+    /// Convert to boolean
+    #[serde(default)]
+    pub to_boolean: bool,
+
+    /// Remove HTML tags
+    #[serde(default)]
+    pub strip_html: bool,
 }
 
 impl ItemConfig {
@@ -65,5 +167,7 @@ pub type ReturnedData = HashMap<String, ReturnedDataItem>;
 #[serde(untagged)]
 pub enum ReturnedDataItem {
     StringItem(String),
+    NumberItem(f64),
+    BoolItem(bool),
     DataItems(Vec<ReturnedData>),
 }

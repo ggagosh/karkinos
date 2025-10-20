@@ -1,0 +1,18 @@
+config:
+  url: https://example.com/data
+  cacheDir: ./.scrape-cache
+  useCache: true
+  timeout: 30
+  retries: 3
+data:
+  items:
+    selector: .item
+    data:
+      id:
+        selector: .id
+        attr: data-id
+      title:
+        selector: .title
+      timestamp:
+        selector: .timestamp
+        attr: data-time
