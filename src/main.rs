@@ -332,8 +332,8 @@ fn populate_values(html: String, config: DataConfig) -> ReturnedData {
 
 #[cfg(test)]
 mod tests {
-    use crate::ReturnedDataItem::{DataItems, StringItem};
-    use crate::{populate_values, DataConfig};
+    use crate::ReturnedDataItem::{BoolItem, DataItems, NumberItem, StringItem};
+    use crate::{apply_transformations, populate_values, DataConfig, ItemConfig};
 
     #[test]
     fn populate_values_test() {
@@ -367,7 +367,7 @@ mod tests {
             data:
                 title:
                     selector: h2
-                description: 
+                description:
                     selector: p
         "#;
         let data_config = serde_yaml::from_str::<DataConfig>(yaml_config).unwrap();
@@ -380,5 +380,213 @@ mod tests {
         );
         let articles = data.get("articles").unwrap().clone();
         assert!(matches!(articles, DataItems { .. }));
+    }
+
+    #[test]
+    fn test_number_conversion() {
+        let html = r#"<div class="price">$99.99</div>"#.to_string();
+
+        let yaml_config = r#"
+        price:
+            selector: .price
+            regex: '\d+\.\d+'
+            toNumber: true
+        "#;
+        let data_config = serde_yaml::from_str::<DataConfig>(yaml_config).unwrap();
+
+        let data = populate_values(html, data_config);
+
+        match data.get("price").unwrap() {
+            NumberItem(n) => assert_eq!(*n, 99.99),
+            _ => panic!("Expected NumberItem"),
+        }
+    }
+
+    #[test]
+    fn test_boolean_conversion() {
+        let html = r#"<div class="status">true</div>"#.to_string();
+
+        let yaml_config = r#"
+        status:
+            selector: .status
+            toBoolean: true
+        "#;
+        let data_config = serde_yaml::from_str::<DataConfig>(yaml_config).unwrap();
+
+        let data = populate_values(html, data_config);
+
+        match data.get("status").unwrap() {
+            BoolItem(b) => assert_eq!(*b, true),
+            _ => panic!("Expected BoolItem"),
+        }
+    }
+
+    #[test]
+    fn test_default_value() {
+        let html = r#"<div class="content">Hello</div>"#.to_string();
+
+        let yaml_config = r#"
+        missing:
+            selector: .nonexistent
+            default: "Default Value"
+        "#;
+        let data_config = serde_yaml::from_str::<DataConfig>(yaml_config).unwrap();
+
+        let data = populate_values(html, data_config);
+
+        assert_eq!(
+            data.get("missing").unwrap().clone(),
+            StringItem(String::from("Default Value"))
+        );
+    }
+
+    #[test]
+    fn test_uppercase_transformation() {
+        let config = ItemConfig {
+            selector: "test".to_string(),
+            attr: None,
+            data: None,
+            trim: true,
+            nth: 0,
+            default: None,
+            regex: None,
+            replace: None,
+            uppercase: true,
+            lowercase: false,
+            to_number: false,
+            to_boolean: false,
+            strip_html: false,
+        };
+
+        let result = apply_transformations("hello world".to_string(), &config);
+        assert_eq!(result, "HELLO WORLD");
+    }
+
+    #[test]
+    fn test_lowercase_transformation() {
+        let config = ItemConfig {
+            selector: "test".to_string(),
+            attr: None,
+            data: None,
+            trim: true,
+            nth: 0,
+            default: None,
+            regex: None,
+            replace: None,
+            uppercase: false,
+            lowercase: true,
+            to_number: false,
+            to_boolean: false,
+            strip_html: false,
+        };
+
+        let result = apply_transformations("HELLO WORLD".to_string(), &config);
+        assert_eq!(result, "hello world");
+    }
+
+    #[test]
+    fn test_regex_extraction() {
+        let config = ItemConfig {
+            selector: "test".to_string(),
+            attr: None,
+            data: None,
+            trim: true,
+            nth: 0,
+            default: None,
+            regex: Some(r"\d+\.\d+".to_string()),
+            replace: None,
+            uppercase: false,
+            lowercase: false,
+            to_number: false,
+            to_boolean: false,
+            strip_html: false,
+        };
+
+        let result = apply_transformations("Price: $99.99 USD".to_string(), &config);
+        assert_eq!(result, "99.99");
+    }
+
+    #[test]
+    fn test_text_replacement() {
+        let config = ItemConfig {
+            selector: "test".to_string(),
+            attr: None,
+            data: None,
+            trim: true,
+            nth: 0,
+            default: None,
+            regex: None,
+            replace: Some(vec!["Breaking: ".to_string(), "".to_string()]),
+            uppercase: false,
+            lowercase: false,
+            to_number: false,
+            to_boolean: false,
+            strip_html: false,
+        };
+
+        let result = apply_transformations("Breaking: News Title".to_string(), &config);
+        assert_eq!(result, "News Title");
+    }
+
+    #[test]
+    fn test_html_stripping() {
+        let config = ItemConfig {
+            selector: "test".to_string(),
+            attr: None,
+            data: None,
+            trim: true,
+            nth: 0,
+            default: None,
+            regex: None,
+            replace: None,
+            uppercase: false,
+            lowercase: false,
+            to_number: false,
+            to_boolean: false,
+            strip_html: true,
+        };
+
+        let result = apply_transformations("<p>Hello <strong>World</strong></p>".to_string(), &config);
+        assert_eq!(result, "Hello World");
+    }
+
+    #[test]
+    fn test_combined_transformations() {
+        let html = r#"<div class="product"><strong>Price: $99.99</strong></div>"#.to_string();
+
+        let yaml_config = r#"
+        price:
+            selector: .product
+            stripHtml: true
+            regex: '\d+\.\d+'
+            toNumber: true
+        "#;
+        let data_config = serde_yaml::from_str::<DataConfig>(yaml_config).unwrap();
+
+        let data = populate_values(html, data_config);
+
+        match data.get("price").unwrap() {
+            NumberItem(n) => assert_eq!(*n, 99.99),
+            _ => panic!("Expected NumberItem"),
+        }
+    }
+
+    #[test]
+    fn test_trim_whitespace() {
+        let html = r#"<div class="content">   Hello World   </div>"#.to_string();
+
+        let yaml_config = r#"
+        content:
+            selector: .content
+            trim: true
+        "#;
+        let data_config = serde_yaml::from_str::<DataConfig>(yaml_config).unwrap();
+
+        let data = populate_values(html, data_config);
+
+        assert_eq!(
+            data.get("content").unwrap().clone(),
+            StringItem(String::from("Hello World"))
+        );
     }
 }
