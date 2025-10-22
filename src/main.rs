@@ -44,20 +44,38 @@ fn generate_paginated_urls(
 
     // Strategy 1: URL pattern with page numbers
     if let Some(pattern) = &pagination.page_pattern {
+        log::info!("Using URL pattern pagination strategy");
         let start = pagination.start_page;
         let end = if let Some(end_page) = pagination.end_page {
+            log::debug!("End page specified: {}", end_page);
             end_page
         } else if pagination.max_pages > 0 {
+            log::debug!("Max pages specified: {}", pagination.max_pages);
             start + pagination.max_pages - 1
         } else {
+            log::debug!("Using default: 10 pages");
             start + 9 // Default to 10 pages if no limit specified
         };
+
+        log::info!(
+            "Pages: {} to {} (total: {} pages)",
+            start,
+            end,
+            end - start + 1
+        );
+        if pagination.stop_on_empty {
+            log::info!("Stop on empty: enabled");
+        }
 
         for page_num in start..=end {
             let url = if pattern.contains("{page}") {
                 pattern.replace("{page}", &page_num.to_string())
             } else {
-                format!("{}{}", base_url, pattern.replace("{page}", &page_num.to_string()))
+                format!(
+                    "{}{}",
+                    base_url,
+                    pattern.replace("{page}", &page_num.to_string())
+                )
             };
 
             // If base_url is not in the pattern, prepend it
@@ -67,6 +85,7 @@ fn generate_paginated_urls(
                 format!("{}{}", base_url, url)
             };
 
+            log::debug!("Generated URL for page {}: {}", page_num, full_url);
             urls.push(full_url);
 
             // Check if we should stop on empty (fetch and check)
@@ -75,6 +94,7 @@ fn generate_paginated_urls(
                 if let Ok(html) = fetch_with_config(&urls[urls.len() - 1], config) {
                     let data = populate_values(html, data_config.clone());
                     if is_empty_result(&data) {
+                        eprintln!("⚠️  Empty page at page {}, stopping", page_num);
                         urls.pop(); // Remove the empty page
                         break;
                     }
@@ -84,25 +104,37 @@ fn generate_paginated_urls(
     }
     // Strategy 2: Follow "next" links
     else if let Some(next_selector) = &pagination.next_selector {
+        log::info!("Using 'next link' pagination strategy");
+        log::info!("Next link selector: {}", next_selector);
+
         let mut current_url = base_url.to_string();
         let mut page_count = 0;
         let max_pages = if pagination.max_pages > 0 {
+            log::info!("Max pages limit: {}", pagination.max_pages);
             pagination.max_pages
         } else {
+            log::debug!("Using safety limit: 1000 pages");
             1000 // Safety limit
         };
 
+        if pagination.stop_on_empty {
+            log::info!("Stop on empty: enabled");
+        }
+
         urls.push(current_url.clone());
         page_count += 1;
+        log::debug!("Page {}: {}", page_count, current_url);
 
         while page_count < max_pages {
             // Fetch current page
+            log::debug!("Fetching page {} to find next link...", page_count);
             let html = fetch_with_config(&current_url, config)?;
 
             // Check if we should stop on empty
             if pagination.stop_on_empty {
                 let data = populate_values(html.clone(), data_config.clone());
                 if is_empty_result(&data) {
+                    eprintln!("⚠️  Empty page at page {}, stopping", page_count);
                     break;
                 }
             }
@@ -127,23 +159,36 @@ fn generate_paginated_urls(
                         format!("{}{}", base, next_href)
                     } else {
                         // Relative URL
-                        let base = current_url.rsplit_once('/').map(|(b, _)| b).unwrap_or(&current_url);
+                        let base = current_url
+                            .rsplit_once('/')
+                            .map(|(b, _)| b)
+                            .unwrap_or(&current_url);
                         format!("{}/{}", base, next_href)
                     };
 
                     urls.push(current_url.clone());
                     page_count += 1;
+                    log::debug!("Page {}: {}", page_count, current_url);
 
                     // Rate limiting between pagination requests
                     if config.delay > 0 {
                         thread::sleep(Duration::from_millis(config.delay));
                     }
                 } else {
+                    eprintln!("⚠️  Next link has no href, stopping at page {}", page_count);
                     break; // No href attribute
                 }
             } else {
+                log::info!(
+                    "No more 'next' links found, stopping at page {}",
+                    page_count
+                );
                 break; // No next link found
             }
+        }
+
+        if page_count >= max_pages {
+            eprintln!("⚠️  Reached max pages limit ({})", max_pages);
         }
     }
 
@@ -170,29 +215,38 @@ fn is_empty_result(data: &ReturnedData) -> bool {
 }
 
 fn main() -> AnyhowResult<()> {
-    // initialize
-    env_logger::init();
+    // Initialize logger with default to 'warn' if RUST_LOG not set
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
 
     let args = Cli::parse();
 
     let config_file_path = args.input.clone().into_os_string().into_string().unwrap();
 
+    eprintln!("📄 Reading config: {}", config_file_path);
+
     // Read file from args
     let config_file = read_to_string(args.input)
         .with_context(|| format!("could not read file `{}`", config_file_path))?;
 
+    log::debug!("Config file loaded successfully");
+
     let config_serialized = serde_yaml::from_str::<ScrapeRoot>(config_file.as_str())
-        .with_context(|| format!("invalid config"))?;
+        .with_context(|| "invalid config".to_string())?;
+
+    log::debug!("Config parsed successfully");
 
     config_serialized
         .validate()
-        .with_context(|| format!("invalid config"))?;
+        .with_context(|| "invalid config".to_string())?;
+
+    log::debug!("Config validated successfully");
 
     let mut urls = config_serialized.config.get_urls();
 
     // Handle pagination
     if let Some(pagination) = &config_serialized.config.pagination {
         if urls.len() == 1 {
+            eprintln!("🔄 Pagination enabled");
             let base_url = &urls[0];
             urls = generate_paginated_urls(
                 base_url,
@@ -200,7 +254,10 @@ fn main() -> AnyhowResult<()> {
                 &config_serialized.config,
                 &config_serialized.data,
             )?;
+            eprintln!("📊 Scraping {} pages", urls.len());
         }
+    } else {
+        eprintln!("📊 Scraping {} URLs", urls.len());
     }
 
     // Process all URLs
@@ -208,15 +265,29 @@ fn main() -> AnyhowResult<()> {
         .iter()
         .enumerate()
         .map(|(idx, url)| {
+            eprintln!("🌐 [{}/{}] {}", idx + 1, urls.len(), url);
+            log::info!("Fetching URL: {}", url);
+
             // Rate limiting: delay between requests
             if idx > 0 && config_serialized.config.delay > 0 {
+                log::debug!(
+                    "Waiting {}ms before next request",
+                    config_serialized.config.delay
+                );
                 thread::sleep(Duration::from_millis(config_serialized.config.delay));
             }
 
             let html = fetch_with_config(url, &config_serialized.config)?;
-            Ok(populate_values(html, config_serialized.data.clone()))
+            log::debug!("HTML fetched, extracting data...");
+
+            let result = populate_values(html, config_serialized.data.clone());
+            log::info!("Data extracted from page {}", idx + 1);
+
+            Ok(result)
         })
         .collect::<AnyhowResult<Vec<ReturnedData>>>()?;
+
+    eprintln!("✅ Scraping complete!");
 
     // If single URL, return single result; otherwise return array
     let output_data = if all_results.len() == 1 {
@@ -228,21 +299,23 @@ fn main() -> AnyhowResult<()> {
     // Write output
     match args.format.as_str() {
         "csv" => {
+            log::debug!("Writing output to CSV format");
             write_csv_output(&all_results, args.output)?;
         }
-        _ => {
-            match args.output {
-                None => {
-                    serde_json::to_writer_pretty(stdout(), &output_data)
-                        .with_context(|| format!("can't write output"))?;
-                }
-                Some(output) => {
-                    let dest = File::create(output)?;
-                    serde_json::to_writer_pretty(dest, &output_data)
-                        .with_context(|| format!("can't write output"))?;
-                }
+        _ => match &args.output {
+            None => {
+                log::debug!("Writing JSON output to stdout");
+                serde_json::to_writer_pretty(stdout(), &output_data)
+                    .with_context(|| "can't write output".to_string())?;
             }
-        }
+            Some(output) => {
+                eprintln!("💾 Saving to: {}", output.display());
+                let dest = File::create(output)?;
+                serde_json::to_writer_pretty(dest, &output_data)
+                    .with_context(|| "can't write output".to_string())?;
+                eprintln!("✅ Saved successfully!");
+            }
+        },
     }
 
     Ok(())
@@ -255,25 +328,24 @@ fn get_cache_path(url: &str, cache_dir: &str) -> PathBuf {
     Path::new(cache_dir).join(format!("{}.html", hash))
 }
 
-fn fetch_with_config(
-    url: &str,
-    config: &types::ScrapeRootConfig,
-) -> AnyhowResult<String> {
+fn fetch_with_config(url: &str, config: &types::ScrapeRootConfig) -> AnyhowResult<String> {
     // Check cache first
     if config.use_cache {
         if let Some(cache_dir) = &config.cache_dir {
             let cache_path = get_cache_path(url, cache_dir);
             if cache_path.exists() {
-                log::info!("Using cached response for {}", url);
+                log::debug!("Using cached response for {}", url);
                 return read_to_string(cache_path)
-                    .with_context(|| format!("failed to read cache"));
+                    .with_context(|| "failed to read cache".to_string());
+            } else {
+                log::debug!("Cache miss for {}", url);
             }
         }
     }
 
     // Build HTTP client
-    let mut client_builder = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(config.timeout));
+    let mut client_builder =
+        reqwest::blocking::Client::builder().timeout(Duration::from_secs(config.timeout));
 
     if let Some(proxy_url) = &config.proxy {
         let proxy = reqwest::Proxy::all(proxy_url)?;
@@ -300,9 +372,10 @@ fn fetch_with_config(
 
         match request.send() {
             Ok(response) => {
+                log::debug!("HTTP request successful");
                 let html = response
                     .text()
-                    .with_context(|| format!("can't get url content"))?;
+                    .with_context(|| "can't get url content".to_string())?;
 
                 // Cache response
                 if let Some(cache_dir) = &config.cache_dir {
@@ -310,6 +383,7 @@ fn fetch_with_config(
                     let cache_path = get_cache_path(url, cache_dir);
                     let mut file = File::create(cache_path)?;
                     file.write_all(html.as_bytes())?;
+                    log::debug!("Response cached");
                 }
 
                 return Ok(html);
@@ -318,7 +392,11 @@ fn fetch_with_config(
                 if attempts >= max_attempts {
                     return Err(e.into());
                 }
-                log::warn!("Request failed (attempt {}/{}): {}", attempts, max_attempts, e);
+                eprintln!(
+                    "⚠️  Request failed (attempt {}/{}): {}",
+                    attempts, max_attempts, e
+                );
+                log::debug!("Retrying in 1 second...");
                 thread::sleep(Duration::from_secs(1));
             }
         }
@@ -383,7 +461,11 @@ fn apply_transformations(mut value: String, config: &ItemConfig) -> String {
     if let Some(regex_pattern) = &config.regex {
         if let Ok(re) = Regex::new(regex_pattern) {
             if let Some(captures) = re.captures(&value) {
-                value = captures.get(0).map(|m| m.as_str()).unwrap_or("").to_string();
+                value = captures
+                    .get(0)
+                    .map(|m| m.as_str())
+                    .unwrap_or("")
+                    .to_string();
             }
         }
     }
@@ -433,11 +515,11 @@ fn populate_values(html: String, config: DataConfig) -> ReturnedData {
                     let selected_element_nth = selected_element.clone().nth(config.nth);
                     let mut value = match selected_element_nth {
                         None => config.default.clone().unwrap_or_else(|| String::from("")),
-                        Some(selected_element) => match config.attr {
+                        Some(selected_element) => match &config.attr {
                             None => selected_element.inner_html(),
                             Some(attr) => selected_element
                                 .value()
-                                .attr(&attr)
+                                .attr(attr)
                                 .unwrap_or("")
                                 .to_string(),
                         },
@@ -453,10 +535,8 @@ fn populate_values(html: String, config: DataConfig) -> ReturnedData {
                             Err(_) => ReturnedDataItem::StringItem(value),
                         }
                     } else if config.to_boolean {
-                        let bool_val = matches!(
-                            value.to_lowercase().trim(),
-                            "true" | "1" | "yes" | "on"
-                        );
+                        let bool_val =
+                            matches!(value.to_lowercase().trim(), "true" | "1" | "yes" | "on");
                         ReturnedDataItem::BoolItem(bool_val)
                     } else {
                         ReturnedDataItem::StringItem(value)
@@ -466,22 +546,19 @@ fn populate_values(html: String, config: DataConfig) -> ReturnedData {
                 }
             }
         })
-        .reduce(
-            || ReturnedData::new(),
-            |dt1, dt2| {
-                dt2.iter().fold(dt1, |mut acc, (name, value)| {
-                    acc.entry(name.clone()).or_insert(value.clone());
+        .reduce(ReturnedData::new, |dt1, dt2| {
+            dt2.iter().fold(dt1, |mut acc, (name, value)| {
+                acc.entry(name.clone()).or_insert(value.clone());
 
-                    acc
-                })
-            },
-        )
+                acc
+            })
+        })
 }
 
 #[cfg(test)]
 mod tests {
     use crate::ReturnedDataItem::{BoolItem, DataItems, NumberItem, StringItem};
-    use crate::{apply_transformations, populate_values, DataConfig, ItemConfig};
+    use crate::{apply_transformations, populate_values, DataConfig, ItemConfig, ReturnedData};
 
     #[test]
     fn populate_values_test() {
@@ -564,7 +641,7 @@ mod tests {
         let data = populate_values(html, data_config);
 
         match data.get("status").unwrap() {
-            BoolItem(b) => assert_eq!(*b, true),
+            BoolItem(b) => assert!(*b),
             _ => panic!("Expected BoolItem"),
         }
     }
@@ -694,7 +771,8 @@ mod tests {
             strip_html: true,
         };
 
-        let result = apply_transformations("<p>Hello <strong>World</strong></p>".to_string(), &config);
+        let result =
+            apply_transformations("<p>Hello <strong>World</strong></p>".to_string(), &config);
         assert_eq!(result, "Hello World");
     }
 
@@ -795,8 +873,7 @@ mod tests {
             endPage: 5
         "#;
 
-        let config: crate::types::ScrapeRootConfig =
-            serde_yaml::from_str(yaml_config).unwrap();
+        let config: crate::types::ScrapeRootConfig = serde_yaml::from_str(yaml_config).unwrap();
 
         assert!(config.pagination.is_some());
         let pagination = config.pagination.unwrap();
@@ -814,8 +891,7 @@ mod tests {
             maxPages: 10
         "#;
 
-        let config: crate::types::ScrapeRootConfig =
-            serde_yaml::from_str(yaml_config).unwrap();
+        let config: crate::types::ScrapeRootConfig = serde_yaml::from_str(yaml_config).unwrap();
 
         assert!(config.pagination.is_some());
         let pagination = config.pagination.unwrap();

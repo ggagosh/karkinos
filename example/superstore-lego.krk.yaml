@@ -1,0 +1,108 @@
+config:
+  url: https://superstore.ge/toy-brand/lego/
+
+  # Pagination using next link
+  # You can limit how many pages to scrape using maxPages
+  pagination:
+    nextSelector: "a.next.page-numbers"
+    maxPages: 10  # Limit to 10 pages (remove or set to 0 for unlimited)
+    stopOnEmpty: true  # Stop if a page has no products
+
+  # Headers to appear more like a real browser
+  headers:
+    User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+    Accept-Language: "ka,en-US;q=0.9,en;q=0.8"
+
+  # Rate limiting to be respectful
+  delay: 2000
+
+  # Timeout and retry settings
+  timeout: 30
+  retries: 2
+
+  # Cache for development
+  cacheDir: ./.cache/superstore
+  useCache: true
+
+data:
+  products:
+    selector: "ul.products.columns-4 li.product.type-product"
+    data:
+      # Product title
+      title:
+        selector: h2.woocommerce-loop-product__title
+        trim: true
+
+      # Product image URL
+      image:
+        selector: img.attachment-woocommerce_thumbnail
+        attr: src
+
+      # Product link
+      url:
+        selector: a.woocommerce-LoopProduct-link
+        attr: href
+
+      # Check if product has discount
+      hasDiscount:
+        selector: span.woocommerce-advanced-product-label.label-red
+        default: "false"
+        toBoolean: true
+
+      # Discount label text (e.g., "50% ფასდაკლება!")
+      discountLabel:
+        selector: span.woocommerce-advanced-product-label.label-red .wapl-label-text
+        default: ""
+
+      # Extract discount percentage if available
+      discountPercent:
+        selector: span.woocommerce-advanced-product-label.label-red .wapl-label-text
+        regex: '\d+'
+        default: "0"
+        toNumber: true
+
+      # Original price (before discount)
+      originalPrice:
+        selector: span.price del span.woocommerce-Price-amount.amount bdi
+        regex: '[\d,]+\.?\d*'
+        replace: [",", ""]
+        toNumber: true
+        default: "0"
+
+      # Current/sale price
+      currentPrice:
+        selector: span.price ins span.woocommerce-Price-amount.amount bdi
+        regex: '[\d,]+\.?\d*'
+        replace: [",", ""]
+        toNumber: true
+        default: "0"
+
+      # If no discount, get the regular price
+      regularPrice:
+        selector: span.price span.woocommerce-Price-amount.amount bdi
+        regex: '[\d,]+\.?\d*'
+        replace: [",", ""]
+        toNumber: true
+        default: "0"
+
+      # Currency symbol
+      currency:
+        selector: span.woocommerce-Price-currencySymbol
+        default: "₾"
+
+      # Check if in stock
+      inStock:
+        selector: li.product.instock
+        default: "true"
+        toBoolean: true
+
+      # Check if it's a new product
+      isNew:
+        selector: .wapl-label.label-green .wapl-label-text
+        default: ""
+
+      # Check if it's exclusive
+      isExclusive:
+        selector: .wapl-label.label-yellow .wapl-label-text
+        default: ""

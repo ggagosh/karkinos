@@ -7,7 +7,7 @@ use validator::Validate;
 
 /// for serde defaults
 fn _default_true() -> bool {
-    return true;
+    true
 }
 
 fn _default_timeout() -> u64 {
@@ -23,7 +23,6 @@ fn _default_delay() -> u64 {
 }
 
 /// Types for Config
-
 pub type DataConfig = HashMap<String, ItemConfig>;
 
 #[derive(Serialize, Deserialize, Debug, Validate, Clone, JsonSchema)]
@@ -123,6 +122,7 @@ fn validate_urls(config: &ScrapeRootConfig) -> Result<(), validator::ValidationE
 }
 
 impl ScrapeRootConfig {
+    #[allow(dead_code)]
     pub fn get_urls(&self) -> Vec<String> {
         if let Some(urls) = &self.urls {
             urls.clone()
@@ -196,7 +196,6 @@ impl ItemConfig {
 }
 
 /// Types for Output
-
 pub type ReturnedData = HashMap<String, ReturnedDataItem>;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

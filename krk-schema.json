@@ -40,30 +40,198 @@
             "$ref": "#/definitions/ItemConfig"
           }
         },
+        "default": {
+          "description": "Default value if extraction fails",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lowercase": {
+          "description": "Convert text to lowercase",
+          "default": false,
+          "type": "boolean"
+        },
         "nth": {
           "default": 0,
           "type": "integer",
           "format": "uint",
           "minimum": 0.0
         },
+        "regex": {
+          "description": "Regex pattern to extract from the text",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "replace": {
+          "description": "Text replacement: [pattern, replacement]",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "selector": {
           "type": "string"
         },
+        "stripHtml": {
+          "description": "Remove HTML tags",
+          "default": false,
+          "type": "boolean"
+        },
+        "toBoolean": {
+          "description": "Convert to boolean",
+          "default": false,
+          "type": "boolean"
+        },
+        "toNumber": {
+          "description": "Convert to number",
+          "default": false,
+          "type": "boolean"
+        },
         "trim": {
           "default": true,
+          "type": "boolean"
+        },
+        "uppercase": {
+          "description": "Convert text to uppercase",
+          "default": false,
+          "type": "boolean"
+        }
+      }
+    },
+    "PaginationConfig": {
+      "type": "object",
+      "properties": {
+        "endPage": {
+          "description": "Ending page number (only used with page_pattern)",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "maxPages": {
+          "description": "Maximum number of pages to scrape (0 = unlimited for next_selector)",
+          "default": 0,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "nextSelector": {
+          "description": "CSS selector for the \"next page\" link",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pagePattern": {
+          "description": "URL pattern with {page} placeholder (e.g., \"?page={page}\")",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "startPage": {
+          "description": "Starting page number (default: 1)",
+          "default": 1,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "stopOnEmpty": {
+          "description": "Stop if no results found on page",
+          "default": false,
           "type": "boolean"
         }
       }
     },
     "ScrapeRootConfig": {
       "type": "object",
-      "required": [
-        "url"
-      ],
       "properties": {
+        "cacheDir": {
+          "description": "Cache directory for storing responses",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "delay": {
+          "description": "Delay between requests in milliseconds (for rate limiting)",
+          "default": 0,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "headers": {
+          "description": "HTTP headers to send with request",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "pagination": {
+          "description": "Pagination configuration",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PaginationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "proxy": {
+          "description": "Proxy URL (e.g., http://proxy:8080)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retries": {
+          "description": "Number of retry attempts on failure",
+          "default": 0,
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "timeout": {
+          "description": "Request timeout in seconds",
+          "default": 30,
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "url": {
-          "type": "string",
+          "description": "Primary URL to scrape (can be overridden by urls)",
+          "type": [
+            "string",
+            "null"
+          ],
           "format": "uri"
+        },
+        "urls": {
+          "description": "Multiple URLs to scrape in batch",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "useCache": {
+          "description": "Use cached responses if available",
+          "default": false,
+          "type": "boolean"
         }
       }
     }
