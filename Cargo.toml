@@ -3,6 +3,12 @@ name = "karkinos"
 version = "0.0.1"
 edition = "2021"
 default-run = "main"
+description = "Powerful and flexible web scraper with YAML configuration, supporting pagination, data transformations, caching, and multiple output formats"
+license = "MIT"
+repository = "https://github.com/ggagosh/karkinos"
+keywords = ["scraper", "web-scraping", "html", "parser", "crawler"]
+categories = ["web-programming", "command-line-utilities", "parser-implementations"]
+authors = ["gagosha <me@gagosha.dev>"]
 
 [[bin]]
 name = "main"
@@ -27,3 +33,7 @@ env_logger = "0.9.0"
 linked-hash-map = { version= "0.5.6", features = ["serde_impl"] }
 schemars = "0.8.10"
 rayon = "1.5"
+regex = "1.7"
+csv = "1.1"
+sha2 = "0.10"
+hex = "0.4"

@@ -1,0 +1,28 @@
+config:
+  url: https://example.com/products
+data:
+  products:
+    selector: .product-card
+    data:
+      name:
+        selector: .product-name
+        stripHtml: true
+      price:
+        selector: .price
+        regex: '\d+\.?\d*'
+        toNumber: true
+      currency:
+        selector: .price
+        regex: '[A-Z]{3}'
+        uppercase: true
+      inStock:
+        selector: .stock-status
+        toBoolean: true
+      description:
+        selector: .description
+        stripHtml: true
+        replace: ["Read more...", ""]
+      rating:
+        selector: .rating
+        default: "0"
+        toNumber: true

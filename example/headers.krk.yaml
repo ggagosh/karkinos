@@ -1,0 +1,17 @@
+config:
+  url: https://api.example.com/data
+  headers:
+    User-Agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    Accept: "application/json"
+    Authorization: "Bearer YOUR_TOKEN_HERE"
+  timeout: 60
+  retries: 3
+data:
+  results:
+    selector: .result
+    data:
+      id:
+        selector: .id
+      value:
+        selector: .value
+        toNumber: true

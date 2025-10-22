@@ -1,0 +1,16 @@
+config:
+  urls:
+    - https://example.com/page1
+    - https://example.com/page2
+    - https://example.com/page3
+  delay: 1000
+  headers:
+    User-Agent: "Karkinos Bot 1.0"
+  retries: 2
+  timeout: 30
+data:
+  title:
+    selector: h1
+  content:
+    selector: .main-content
+    stripHtml: true
