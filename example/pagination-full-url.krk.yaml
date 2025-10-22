@@ -1,0 +1,22 @@
+config:
+  url: https://example.com
+  pagination:
+    pagePattern: "https://example.com/search?q=rust&page={page}"
+    startPage: 1
+    maxPages: 20
+    stopOnEmpty: true
+  delay: 1500
+  cacheDir: ./.pagination-cache
+  useCache: true
+data:
+  results:
+    selector: .search-result
+    data:
+      title:
+        selector: h3
+      description:
+        selector: .description
+        stripHtml: true
+      url:
+        selector: a
+        attr: href

@@ -34,6 +34,141 @@ struct Cli {
     format: String,
 }
 
+fn generate_paginated_urls(
+    base_url: &str,
+    pagination: &types::PaginationConfig,
+    config: &types::ScrapeRootConfig,
+    data_config: &DataConfig,
+) -> AnyhowResult<Vec<String>> {
+    let mut urls = Vec::new();
+
+    // Strategy 1: URL pattern with page numbers
+    if let Some(pattern) = &pagination.page_pattern {
+        let start = pagination.start_page;
+        let end = if let Some(end_page) = pagination.end_page {
+            end_page
+        } else if pagination.max_pages > 0 {
+            start + pagination.max_pages - 1
+        } else {
+            start + 9 // Default to 10 pages if no limit specified
+        };
+
+        for page_num in start..=end {
+            let url = if pattern.contains("{page}") {
+                pattern.replace("{page}", &page_num.to_string())
+            } else {
+                format!("{}{}", base_url, pattern.replace("{page}", &page_num.to_string()))
+            };
+
+            // If base_url is not in the pattern, prepend it
+            let full_url = if url.starts_with("http") {
+                url
+            } else {
+                format!("{}{}", base_url, url)
+            };
+
+            urls.push(full_url);
+
+            // Check if we should stop on empty (fetch and check)
+            if pagination.stop_on_empty && page_num > start {
+                // Fetch the page and check if it has results
+                if let Ok(html) = fetch_with_config(&urls[urls.len() - 1], config) {
+                    let data = populate_values(html, data_config.clone());
+                    if is_empty_result(&data) {
+                        urls.pop(); // Remove the empty page
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    // Strategy 2: Follow "next" links
+    else if let Some(next_selector) = &pagination.next_selector {
+        let mut current_url = base_url.to_string();
+        let mut page_count = 0;
+        let max_pages = if pagination.max_pages > 0 {
+            pagination.max_pages
+        } else {
+            1000 // Safety limit
+        };
+
+        urls.push(current_url.clone());
+        page_count += 1;
+
+        while page_count < max_pages {
+            // Fetch current page
+            let html = fetch_with_config(&current_url, config)?;
+
+            // Check if we should stop on empty
+            if pagination.stop_on_empty {
+                let data = populate_values(html.clone(), data_config.clone());
+                if is_empty_result(&data) {
+                    break;
+                }
+            }
+
+            // Find next link
+            let parsed_html = Html::parse_document(&html);
+            let selector = scraper::Selector::parse(next_selector)
+                .map_err(|e| anyhow::anyhow!("Invalid next_selector: {:?}", e))?;
+
+            if let Some(next_element) = parsed_html.select(&selector).next() {
+                if let Some(next_href) = next_element.value().attr("href") {
+                    // Make absolute URL if needed
+                    current_url = if next_href.starts_with("http") {
+                        next_href.to_string()
+                    } else if next_href.starts_with("/") {
+                        // Extract base domain from current_url
+                        let base = current_url
+                            .split('/')
+                            .take(3)
+                            .collect::<Vec<&str>>()
+                            .join("/");
+                        format!("{}{}", base, next_href)
+                    } else {
+                        // Relative URL
+                        let base = current_url.rsplit_once('/').map(|(b, _)| b).unwrap_or(&current_url);
+                        format!("{}/{}", base, next_href)
+                    };
+
+                    urls.push(current_url.clone());
+                    page_count += 1;
+
+                    // Rate limiting between pagination requests
+                    if config.delay > 0 {
+                        thread::sleep(Duration::from_millis(config.delay));
+                    }
+                } else {
+                    break; // No href attribute
+                }
+            } else {
+                break; // No next link found
+            }
+        }
+    }
+
+    Ok(urls)
+}
+
+fn is_empty_result(data: &ReturnedData) -> bool {
+    if data.is_empty() {
+        return true;
+    }
+
+    // Check if all values are empty
+    for value in data.values() {
+        match value {
+            ReturnedDataItem::StringItem(s) if !s.is_empty() => return false,
+            ReturnedDataItem::DataItems(items) if !items.is_empty() => return false,
+            ReturnedDataItem::NumberItem(_) => return false,
+            ReturnedDataItem::BoolItem(_) => return false,
+            _ => {}
+        }
+    }
+
+    true
+}
+
 fn main() -> AnyhowResult<()> {
     // initialize
     env_logger::init();
@@ -53,7 +188,20 @@ fn main() -> AnyhowResult<()> {
         .validate()
         .with_context(|| format!("invalid config"))?;
 
-    let urls = config_serialized.config.get_urls();
+    let mut urls = config_serialized.config.get_urls();
+
+    // Handle pagination
+    if let Some(pagination) = &config_serialized.config.pagination {
+        if urls.len() == 1 {
+            let base_url = &urls[0];
+            urls = generate_paginated_urls(
+                base_url,
+                pagination,
+                &config_serialized.config,
+                &config_serialized.data,
+            )?;
+        }
+    }
 
     // Process all URLs
     let all_results: Vec<ReturnedData> = urls
@@ -588,5 +736,90 @@ mod tests {
             data.get("content").unwrap().clone(),
             StringItem(String::from("Hello World"))
         );
+    }
+
+    #[test]
+    fn test_is_empty_result_empty() {
+        use crate::is_empty_result;
+        let data = ReturnedData::new();
+        assert!(is_empty_result(&data));
+    }
+
+    #[test]
+    fn test_is_empty_result_with_empty_string() {
+        use crate::is_empty_result;
+        let mut data = ReturnedData::new();
+        data.insert("test".to_string(), StringItem(String::new()));
+        assert!(is_empty_result(&data));
+    }
+
+    #[test]
+    fn test_is_empty_result_with_content() {
+        use crate::is_empty_result;
+        let mut data = ReturnedData::new();
+        data.insert("test".to_string(), StringItem("content".to_string()));
+        assert!(!is_empty_result(&data));
+    }
+
+    #[test]
+    fn test_is_empty_result_with_number() {
+        use crate::is_empty_result;
+        let mut data = ReturnedData::new();
+        data.insert("test".to_string(), NumberItem(42.0));
+        assert!(!is_empty_result(&data));
+    }
+
+    #[test]
+    fn test_is_empty_result_with_bool() {
+        use crate::is_empty_result;
+        let mut data = ReturnedData::new();
+        data.insert("test".to_string(), BoolItem(false));
+        assert!(!is_empty_result(&data));
+    }
+
+    #[test]
+    fn test_is_empty_result_with_empty_array() {
+        use crate::is_empty_result;
+        let mut data = ReturnedData::new();
+        data.insert("test".to_string(), DataItems(vec![]));
+        assert!(is_empty_result(&data));
+    }
+
+    #[test]
+    fn test_pagination_config_parsing() {
+        let yaml_config = r#"
+        url: https://example.com
+        pagination:
+            pagePattern: "?page={page}"
+            startPage: 1
+            endPage: 5
+        "#;
+
+        let config: crate::types::ScrapeRootConfig =
+            serde_yaml::from_str(yaml_config).unwrap();
+
+        assert!(config.pagination.is_some());
+        let pagination = config.pagination.unwrap();
+        assert_eq!(pagination.page_pattern, Some("?page={page}".to_string()));
+        assert_eq!(pagination.start_page, 1);
+        assert_eq!(pagination.end_page, Some(5));
+    }
+
+    #[test]
+    fn test_pagination_next_selector_parsing() {
+        let yaml_config = r#"
+        url: https://example.com
+        pagination:
+            nextSelector: "a.next"
+            maxPages: 10
+        "#;
+
+        let config: crate::types::ScrapeRootConfig =
+            serde_yaml::from_str(yaml_config).unwrap();
+
+        assert!(config.pagination.is_some());
+        let pagination = config.pagination.unwrap();
+        assert_eq!(pagination.next_selector, Some("a.next".to_string()));
+        assert_eq!(pagination.max_pages, 10);
     }
 }

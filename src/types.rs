@@ -75,6 +75,42 @@ pub struct ScrapeRootConfig {
     /// Use cached responses if available
     #[serde(default)]
     pub use_cache: bool,
+
+    /// Pagination configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pagination: Option<PaginationConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PaginationConfig {
+    /// CSS selector for the "next page" link
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub next_selector: Option<String>,
+
+    /// URL pattern with {page} placeholder (e.g., "?page={page}")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub page_pattern: Option<String>,
+
+    /// Starting page number (default: 1)
+    #[serde(default = "_default_start_page")]
+    pub start_page: usize,
+
+    /// Maximum number of pages to scrape (0 = unlimited for next_selector)
+    #[serde(default)]
+    pub max_pages: usize,
+
+    /// Ending page number (only used with page_pattern)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_page: Option<usize>,
+
+    /// Stop if no results found on page
+    #[serde(default)]
+    pub stop_on_empty: bool,
+}
+
+fn _default_start_page() -> usize {
+    1
 }
 
 fn validate_urls(config: &ScrapeRootConfig) -> Result<(), validator::ValidationError> {

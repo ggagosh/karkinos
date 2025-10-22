@@ -174,15 +174,81 @@ Tests chaining multiple transformations together.
 
 ---
 
+### 6. Pagination Tests
+
+#### `test_is_empty_result_empty`
+Tests detection of completely empty results.
+
+**Input:** Empty HashMap
+**Expected:** `true`
+
+#### `test_is_empty_result_with_empty_string`
+Tests detection of results with empty strings.
+
+**Input:** HashMap with empty string value
+**Expected:** `true`
+
+#### `test_is_empty_result_with_content`
+Tests detection of results with actual content.
+
+**Input:** HashMap with non-empty string
+**Expected:** `false`
+
+#### `test_is_empty_result_with_number`
+Tests detection of numeric values.
+
+**Input:** HashMap with number value
+**Expected:** `false` (numbers are never empty)
+
+#### `test_is_empty_result_with_bool`
+Tests detection of boolean values.
+
+**Input:** HashMap with boolean value
+**Expected:** `false` (booleans are never empty)
+
+#### `test_is_empty_result_with_empty_array`
+Tests detection of empty arrays.
+
+**Input:** HashMap with empty DataItems array
+**Expected:** `true`
+
+#### `test_pagination_config_parsing`
+Tests parsing of URL pattern pagination configuration.
+
+**Config:**
+```yaml
+pagination:
+  pagePattern: "?page={page}"
+  startPage: 1
+  endPage: 5
+```
+
+**Expected:** Correctly parsed PaginationConfig
+
+#### `test_pagination_next_selector_parsing`
+Tests parsing of next link pagination configuration.
+
+**Config:**
+```yaml
+pagination:
+  nextSelector: "a.next"
+  maxPages: 10
+```
+
+**Expected:** Correctly parsed PaginationConfig
+
+---
+
 ## Test Statistics
 
-- **Total Tests:** 11
+- **Total Tests:** 19
 - **Coverage Areas:**
   - Basic scraping: 1 test
   - Type conversion: 2 tests
   - Default values: 1 test
   - Text transformations: 6 tests
   - Combined operations: 1 test
+  - Pagination: 8 tests (6 helper + 2 config parsing)
 
 ## Test Dependencies
 
@@ -302,18 +368,26 @@ None currently. Report issues at: https://github.com/ggagosh/karkinos/issues
 Expected test output:
 
 ```
-running 11 tests
+running 19 tests
 test tests::populate_values_test ... ok
 test tests::test_boolean_conversion ... ok
 test tests::test_combined_transformations ... ok
 test tests::test_default_value ... ok
 test tests::test_html_stripping ... ok
+test tests::test_is_empty_result_empty ... ok
+test tests::test_is_empty_result_with_bool ... ok
+test tests::test_is_empty_result_with_content ... ok
+test tests::test_is_empty_result_with_empty_array ... ok
+test tests::test_is_empty_result_with_empty_string ... ok
+test tests::test_is_empty_result_with_number ... ok
 test tests::test_lowercase_transformation ... ok
 test tests::test_number_conversion ... ok
+test tests::test_pagination_config_parsing ... ok
+test tests::test_pagination_next_selector_parsing ... ok
 test tests::test_regex_extraction ... ok
 test tests::test_text_replacement ... ok
 test tests::test_trim_whitespace ... ok
 test tests::test_uppercase_transformation ... ok
 
-test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```

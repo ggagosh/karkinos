@@ -1,0 +1,19 @@
+config:
+  url: https://example.com/blog
+  pagination:
+    nextSelector: "a.next-page"
+    maxPages: 10
+    stopOnEmpty: true
+  delay: 2000
+  headers:
+    User-Agent: "Karkinos Bot 1.0"
+data:
+  articles:
+    selector: article
+    data:
+      title:
+        selector: h2
+      date:
+        selector: .post-date
+      author:
+        selector: .author

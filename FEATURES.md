@@ -7,9 +7,10 @@ This document provides a comprehensive overview of all the enhanced capabilities
 1. [HTTP Configuration](#http-configuration)
 2. [Data Transformation](#data-transformation)
 3. [Multiple URL Support](#multiple-url-support)
-4. [Caching System](#caching-system)
-5. [Output Formats](#output-formats)
-6. [Type System](#type-system)
+4. [Pagination](#pagination)
+5. [Caching System](#caching-system)
+6. [Output Formats](#output-formats)
+7. [Type System](#type-system)
 
 ---
 
@@ -251,6 +252,230 @@ config:
 **Output behavior:**
 - Single URL: Returns object
 - Multiple URLs: Returns array of objects
+
+---
+
+## Pagination
+
+Automatically scrape multiple pages using URL patterns or by following "next" links.
+
+### URL Pattern Pagination
+
+Generate URLs using a pattern with a `{page}` placeholder.
+
+```yaml
+config:
+  url: https://example.com/products
+  pagination:
+    pagePattern: "?page={page}"
+    startPage: 1
+    endPage: 10
+    stopOnEmpty: false
+  delay: 1000
+data:
+  products:
+    selector: .product
+    data:
+      name:
+        selector: .name
+      price:
+        selector: .price
+        toNumber: true
+```
+
+**How it works:**
+1. Generates URLs: `https://example.com/products?page=1`, `?page=2`, etc.
+2. Scrapes each page with the same data configuration
+3. Combines results from all pages
+4. Applies rate limiting between pages
+
+**Use cases:**
+- E-commerce product listings
+- Search results
+- Blog archives
+- Any site with numbered pages
+
+### Next Link Pagination
+
+Follow "next page" links automatically.
+
+```yaml
+config:
+  url: https://example.com/blog
+  pagination:
+    nextSelector: "a.next-page"
+    maxPages: 20
+    stopOnEmpty: true
+  delay: 2000
+data:
+  articles:
+    selector: article
+    data:
+      title:
+        selector: h2
+      content:
+        selector: .content
+```
+
+**How it works:**
+1. Scrapes the first page
+2. Finds the "next" link using CSS selector
+3. Follows the link and scrapes the next page
+4. Repeats until no "next" link found or maxPages reached
+5. Handles relative and absolute URLs automatically
+
+**Use cases:**
+- Blogs with "next page" buttons
+- Forums with sequential pagination
+- Any site with navigation links
+
+### Full URL Pattern
+
+Specify complete URLs with page numbers.
+
+```yaml
+config:
+  url: https://example.com
+  pagination:
+    pagePattern: "https://example.com/search?q=rust&page={page}"
+    startPage: 1
+    maxPages: 5
+```
+
+**Use cases:**
+- Complex URL structures
+- Search results with parameters
+- APIs with pagination
+
+### Configuration Options
+
+| Option | Type | Description | Default |
+|--------|------|-------------|---------|
+| `pagePattern` | string | URL pattern with `{page}` placeholder | - |
+| `nextSelector` | string | CSS selector for "next page" link | - |
+| `startPage` | number | Starting page number | 1 |
+| `maxPages` | number | Maximum pages to scrape (0 = unlimited) | 0 |
+| `endPage` | number | Ending page number (pagePattern only) | - |
+| `stopOnEmpty` | boolean | Stop if no results found on page | false |
+
+**Note:** Use either `pagePattern` OR `nextSelector`, not both.
+
+### Stop on Empty
+
+Automatically stop pagination when a page has no results.
+
+```yaml
+config:
+  url: https://example.com/products
+  pagination:
+    pagePattern: "?page={page}"
+    startPage: 1
+    maxPages: 100
+    stopOnEmpty: true  # Stops early if page is empty
+```
+
+**Benefits:**
+- Avoid scraping empty pages
+- Save bandwidth and time
+- Automatic detection of last page
+
+### Examples
+
+**Example 1: E-commerce Pagination**
+```yaml
+config:
+  url: https://shop.example.com/products
+  pagination:
+    pagePattern: "?page={page}"
+    startPage: 1
+    endPage: 50
+  delay: 1000
+  headers:
+    User-Agent: "Karkinos Bot 1.0"
+data:
+  products:
+    selector: .product-card
+    data:
+      name:
+        selector: .name
+      price:
+        selector: .price
+        regex: '\d+\.\d+'
+        toNumber: true
+```
+
+**Example 2: Blog with Next Links**
+```yaml
+config:
+  url: https://blog.example.com
+  pagination:
+    nextSelector: "a[rel='next']"
+    maxPages: 20
+    stopOnEmpty: true
+  delay: 2000
+  cacheDir: ./blog-cache
+  useCache: true
+data:
+  posts:
+    selector: article.post
+    data:
+      title:
+        selector: h1
+      date:
+        selector: time
+        attr: datetime
+      body:
+        selector: .post-content
+        stripHtml: true
+```
+
+**Example 3: API Pagination**
+```yaml
+config:
+  url: https://api.example.com
+  pagination:
+    pagePattern: "https://api.example.com/items?offset={page}0&limit=10"
+    startPage: 0
+    maxPages: 10
+  headers:
+    Authorization: "Bearer token123"
+data:
+  items:
+    selector: .item
+    data:
+      id:
+        selector: .id
+      value:
+        selector: .value
+```
+
+### Best Practices
+
+1. **Always use delays** to avoid overwhelming servers:
+   ```yaml
+   delay: 1000  # At least 1 second between pages
+   ```
+
+2. **Set reasonable limits**:
+   ```yaml
+   maxPages: 50  # Don't scrape thousands of pages
+   ```
+
+3. **Use caching during development**:
+   ```yaml
+   cacheDir: ./pagination-cache
+   useCache: true
+   ```
+
+4. **Use stopOnEmpty** when appropriate:
+   ```yaml
+   stopOnEmpty: true  # Auto-detect last page
+   ```
+
+5. **Monitor progress** with logging:
+   ```bash
+   RUST_LOG=info cargo run --bin main config.yaml
+   ```
 
 ---
 

@@ -1,0 +1,19 @@
+config:
+  url: https://example.com/products
+  pagination:
+    pagePattern: "?page={page}"
+    startPage: 1
+    endPage: 5
+    stopOnEmpty: false
+  delay: 1000
+  timeout: 30
+data:
+  products:
+    selector: .product-item
+    data:
+      name:
+        selector: .product-name
+      price:
+        selector: .price
+        regex: '\d+\.\d+'
+        toNumber: true

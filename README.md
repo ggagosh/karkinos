@@ -17,6 +17,7 @@ Inspired by [scrape-it](https://github.com/IonicaBizau/scrape-it)
 - **Multiple Output Formats**: Export to JSON or CSV
 - **Parallel Processing**: Fast extraction using Rayon
 - **Type Conversion**: Automatic conversion to numbers and booleans
+- **Pagination Support**: Automatically scrape multiple pages using URL patterns or "next" links
 
 ## Installation
 
@@ -173,6 +174,45 @@ data:
             selector: span
 ```
 
+#### Pagination
+
+Automatically scrape multiple pages:
+
+```yaml
+# Strategy 1: URL pattern with page numbers
+config:
+  url: https://example.com/products
+  pagination:
+    pagePattern: "?page={page}"
+    startPage: 1
+    endPage: 10
+    stopOnEmpty: false
+
+# Strategy 2: Follow "next" links
+config:
+  url: https://example.com/blog
+  pagination:
+    nextSelector: "a.next-page"
+    maxPages: 20
+    stopOnEmpty: true
+
+# Strategy 3: Full URL pattern
+config:
+  url: https://example.com
+  pagination:
+    pagePattern: "https://example.com/search?q=rust&page={page}"
+    startPage: 1
+    maxPages: 5
+```
+
+**Pagination Options:**
+- `pagePattern`: URL pattern with `{page}` placeholder
+- `nextSelector`: CSS selector for "next page" link
+- `startPage`: Starting page number (default: 1)
+- `maxPages`: Maximum pages to scrape (0 = unlimited for nextSelector)
+- `endPage`: Ending page number (for pagePattern)
+- `stopOnEmpty`: Stop if no results found on page
+
 ## Examples
 
 ### Example 1: Basic Scraping
@@ -241,6 +281,26 @@ config:
 data:
   content:
     selector: .main-content
+```
+
+### Example 5: Pagination
+
+```yaml
+config:
+  url: https://example.com/blog
+  pagination:
+    nextSelector: "a.next-page"
+    maxPages: 10
+    stopOnEmpty: true
+  delay: 1000
+data:
+  articles:
+    selector: article
+    data:
+      title:
+        selector: h2
+      date:
+        selector: .post-date
 ```
 
 ## Output Formats
