@@ -1,6 +1,6 @@
 [package]
 name = "karkinos"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 default-run = "main"
 description = "Powerful and flexible web scraper with YAML configuration, supporting pagination, data transformations, caching, and multiple output formats"
