@@ -14,7 +14,7 @@ use validator::Validate;
 
 use crate::types::{DataConfig, ItemConfig, ReturnedData, ReturnedDataItem, ScrapeRoot};
 
-mod types;
+pub mod types;
 
 /// CLI application to scrape website based on yml config 🦀
 /// Inspired by: https://github.com/IonicaBizau/scrape-it ❤️

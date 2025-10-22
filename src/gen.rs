@@ -4,8 +4,10 @@ extern crate serde_json;
 use schemars::schema_for;
 use std::fs::File;
 
-#[path = "types.rs"]
-mod types;
+// Only include the types needed for schema generation
+mod types {
+    pub use karkinos::types::ScrapeRoot;
+}
 
 fn main() {
     let dest = File::create("./krk-schema.json").expect("can't create json schema file :(");

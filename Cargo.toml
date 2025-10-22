@@ -10,6 +10,10 @@ keywords = ["scraper", "web-scraping", "html", "parser", "crawler"]
 categories = ["web-programming", "command-line-utilities", "parser-implementations"]
 authors = ["gagosha <me@gagosha.dev>"]
 
+[lib]
+name = "karkinos"
+path = "src/lib.rs"
+
 [[bin]]
 name = "main"
 path = "src/main.rs"
